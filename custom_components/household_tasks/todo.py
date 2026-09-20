@@ -139,6 +139,7 @@ class HouseholdTasksTodoListEntity(TodoListEntity):
                     "assignee": task["assignee"],
                     "assignee_name": self._store.assignee_label(task["assignee"]),
                     "recurring": task.get("recurring"),
+                    "completed_at": task.get("completed_at"),
                 }
                 for task in self._store.tasks
             ],
