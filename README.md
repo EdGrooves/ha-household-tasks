@@ -27,6 +27,13 @@ and that list is saved only in your own Home Assistant configuration.
   in the stock to-do item dialog.
 - Recurring tasks regenerate **immediately** on completion, unclaimed,
   with the next due date — no periodic polling automation involved.
+- A custom Lovelace card (`custom:household-tasks-card`) with real
+  per-task chips — a colored assignee badge and a recurring badge on
+  each row, not just in a separate summary — plus an inline add-task
+  row. Registers itself automatically (no manual "add resource" step);
+  just add a card with `type: custom:household-tasks-card` and
+  `entity: todo.household_tasks` to any dashboard. The stock `todo-list`
+  card still works too if you'd rather use that instead.
 
 ## Install
 

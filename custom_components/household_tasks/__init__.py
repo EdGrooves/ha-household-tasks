@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import voluptuous as vol
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
@@ -17,6 +19,8 @@ from .const import (
 from .store import HouseholdTasksStore
 
 PLATFORMS = ["todo", "sensor"]
+
+CARD_URL_PATH = "/household_tasks_static/household-tasks-card.js"
 
 ADD_TASK_SCHEMA = vol.Schema(
     {
@@ -42,6 +46,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     store = HouseholdTasksStore(hass, entry.entry_id, members)
     await store.async_load()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = store
+
+    # Serve the custom card's JS and auto-inject it into every dashboard
+    # load, so it's usable without the user manually adding a Lovelace
+    # resource. add_extra_js_url is idempotent per URL, so re-running
+    # this on entry reload (e.g. after a member rename) is harmless.
+    await hass.http.async_register_static_paths(
+        [
+            StaticPathConfig(
+                CARD_URL_PATH,
+                hass.config.path(
+                    "custom_components/household_tasks/www/household-tasks-card.js"
+                ),
+                cache_headers=False,
+            )
+        ]
+    )
+    add_extra_js_url(hass, CARD_URL_PATH)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 

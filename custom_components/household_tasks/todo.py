@@ -47,6 +47,10 @@ class HouseholdTasksTodoListEntity(TodoListEntity):
         | TodoListEntityFeature.SET_DUE_DATE_ON_ITEM
         | TodoListEntityFeature.SET_DESCRIPTION_ON_ITEM
     )
+    # The 'tasks'/'members' attributes change on every task edit and are
+    # only meant for the custom card to read live — not worth recording
+    # a full history snapshot of on every write.
+    _unrecorded_attributes = frozenset({"tasks", "members"})
 
     def __init__(self, store: HouseholdTasksStore, entry: ConfigEntry) -> None:
         self._store = store
@@ -115,3 +119,28 @@ class HouseholdTasksTodoListEntity(TodoListEntity):
         await self._store.async_delete_tasks(uids)
         self._refresh()
         self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Full structured task data for the custom card.
+
+        The stock to-do card only ever sees the synthesized description
+        text (via _refresh/todo_items above); this attribute is the real
+        per-field data — assignee id/name, recurring interval/unit — that
+        household-tasks-card.js reads directly from hass.states instead.
+        """
+        return {
+            "tasks": [
+                {
+                    "uid": task["uid"],
+                    "summary": task["summary"],
+                    "status": task["status"],
+                    "due": task.get("due"),
+                    "assignee": task["assignee"],
+                    "assignee_name": self._store.assignee_label(task["assignee"]),
+                    "recurring": task.get("recurring"),
+                }
+                for task in self._store.tasks
+            ],
+            "members": self._store.members,
+        }
