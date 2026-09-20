@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Household Tasks",
+        "description": "Set up the Household Tasks list."
+      }
+    },
+    "abort": {
+      "already_configured": "Household Tasks is already set up."
+    }
+  }
+}

@@ -1,0 +1,70 @@
+add_task:
+  name: Add task
+  description: Add a new household task, optionally recurring and pre-assigned.
+  fields:
+    name:
+      name: Name
+      description: The task name.
+      required: true
+      selector:
+        text:
+    assignee:
+      name: Assignee
+      description: Who to assign the task to (leave as unclaimed for either person to grab).
+      required: false
+      default: unclaimed
+      selector:
+        select:
+          options:
+            - unclaimed
+            - christine
+            - eduard
+    recurring:
+      name: Recurring
+      description: Whether this task repeats after being completed.
+      required: false
+      default: false
+      selector:
+        boolean:
+    interval:
+      name: Interval
+      description: How often it repeats. Only used if Recurring is on.
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box
+    unit:
+      name: Unit
+      description: Interval unit. Only used if Recurring is on.
+      required: false
+      default: days
+      selector:
+        select:
+          options:
+            - days
+            - weeks
+            - months
+
+claim_task:
+  name: Claim task
+  description: Assign an existing open task, matched by its exact name.
+  fields:
+    name:
+      name: Name
+      description: The exact name of the open task to claim.
+      required: true
+      selector:
+        text:
+    assignee:
+      name: Assignee
+      description: Who is claiming it.
+      required: true
+      selector:
+        select:
+          options:
+            - unclaimed
+            - christine
+            - eduard
