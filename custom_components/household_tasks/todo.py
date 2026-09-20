@@ -95,10 +95,15 @@ class HouseholdTasksTodoListEntity(TodoListEntity):
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
         due = item.due.isoformat() if item.due else None
+        # item.status is usually a TodoItemStatus (a str subclass), but at
+        # least one HA version's internal update path passes a plain str
+        # here instead — str() is safe for both since TodoItemStatus's
+        # string value is what we want either way.
+        status = str(item.status) if item.status is not None else None
         await self._store.async_update_task(
             uid=item.uid,
             summary=item.summary,
-            status=item.status.value if item.status else None,
+            status=status,
             description=item.description,
             description_given=item.description is not None,
             due=due,
