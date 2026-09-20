@@ -1,24 +1,25 @@
-# Household Tasks
+# ha-household-tasks
 
-A minimal Home Assistant integration for a two-person household task list:
-one-time and recurring tasks, assignable to either person or left
-unclaimed. Built to replace a text-parsing helper/automation setup with
-real structured data, without pulling in features a small household
+A minimal Home Assistant integration for a household task list: one-time
+and recurring tasks, assignable to any number of household members or
+left unclaimed. Built to replace a text-parsing helper/automation setup
+with real structured data, without pulling in features a small household
 doesn't need (no meal planning, no external provider sync, no AI images).
 
-Nothing about who lives in the household is stored in this repo — during
-setup you're asked for the two members' names, which are saved only in
-your own Home Assistant configuration.
+Nothing about who's in the household is stored in this repo. During
+setup (and any time after, via Settings) you enter a comma-separated
+list of names — add, rename, or remove people whenever, no fixed count —
+and that list is saved only in your own Home Assistant configuration.
 
 ## What it gives you
 
 - `todo.household_tasks` — a normal to-do list entity, so every existing
   to-do card, Assist voice command, and automation trigger that works
   with `todo.*` entities works here too.
-- `sensor.household_tasks_unclaimed` / `_member1` / `_member2` /
-  `_recurring` — live open-task counts, updated instantly whenever a task
-  changes (no polling). The two person sensors are labeled with whatever
-  names you entered during setup.
+- One `sensor.household_tasks_*` per configured member, plus
+  `sensor.household_tasks_unclaimed` and `_recurring` — live open-task
+  counts, updated instantly whenever a task changes (no polling). The
+  set of member sensors matches your current member list automatically.
 - Two services: `household_tasks.add_task` (name, assignee, recurring,
   interval, unit) and `household_tasks.claim_task` (name, assignee) —
   structured input instead of typing `Assigned: <name>` into a text
@@ -34,9 +35,12 @@ your own Home Assistant configuration.
 2. Install "Household Tasks" through HACS
 3. Restart Home Assistant
 4. Settings → Devices & Services → Add Integration → "Household Tasks"
-   — you'll be asked for the two household members' names here
-5. Names can be changed later any time via Settings → Devices &
-   Services → Household Tasks → Configure, no restart needed
+   — enter household members' names here, comma-separated (or leave
+   blank and add them later)
+5. Change the member list any time via Settings → Devices & Services →
+   Household Tasks → **Configure** — no restart needed, and renaming
+   someone keeps their existing tasks and sensor rather than starting
+   fresh
 
 ## Task conventions
 

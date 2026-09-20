@@ -2,10 +2,13 @@
 
 Tasks are kept as plain dicts backed by Home Assistant's Store helper
 (the same JSON-persistence mechanism most core integrations use for
-local state). Assignee is stored as a stable key (member1/member2/
-unclaimed) rather than a name directly, so renaming a person later
-(via the options flow) doesn't require touching any stored task —
-only the display label changes.
+local state). Assignee is stored as a member's stable id, not their
+name — ids are generated once (see config_flow.py) and preserved across
+renames, so renaming someone in Settings doesn't orphan their existing
+tasks. Removing a member entirely does leave any tasks still assigned to
+them: they simply stop being counted under a specific person (they fall
+back to counting as unclaimed) since their id no longer matches anyone
+in the current member list.
 """
 from __future__ import annotations
 
@@ -18,13 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
-from .const import (
-    ASSIGNEE_MEMBER1,
-    ASSIGNEE_MEMBER2,
-    ASSIGNEE_UNCLAIMED,
-    SIGNAL_UPDATE,
-    STORAGE_VERSION,
-)
+from .const import ASSIGNEE_UNCLAIMED, SIGNAL_UPDATE, STORAGE_VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,12 +58,13 @@ def _new_task(
 class HouseholdTasksStore:
     """In-memory task list backed by HA's Store helper."""
 
-    def __init__(self, hass: HomeAssistant, entry_id: str, member_names: dict[str, str]) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str, members: list[dict[str, str]]) -> None:
         self.hass = hass
         self._store: Store = Store(hass, STORAGE_VERSION, f"household_tasks_{entry_id}")
         self.tasks: list[dict[str, Any]] = []
-        # {"member1": "<name entered at setup>", "member2": "<...>"}
-        self.member_names = member_names
+        # [{"id": "<8 hex chars>", "name": "<whatever was entered>"}, ...]
+        # any length, including zero.
+        self.members: list[dict[str, str]] = members
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
@@ -76,18 +74,25 @@ class HouseholdTasksStore:
         await self._store.async_save({"tasks": self.tasks})
         async_dispatcher_send(self.hass, SIGNAL_UPDATE)
 
-    # -- name <-> stable key resolution ------------------------------------
+    # -- name <-> stable id resolution ---------------------------------------
 
     def resolve_assignee(self, text: str) -> str:
-        """Match free text (a configured name, or anything else) to a key."""
+        """Match free text (a configured member's name) to their id."""
         value = (text or "").strip().lower()
-        for key, name in self.member_names.items():
-            if name and value == name.strip().lower():
-                return key
+        if not value:
+            return ASSIGNEE_UNCLAIMED
+        for member in self.members:
+            if member["name"].strip().lower() == value:
+                return member["id"]
         return ASSIGNEE_UNCLAIMED
 
-    def assignee_label(self, key: str) -> str | None:
-        return self.member_names.get(key)
+    def assignee_label(self, assignee_id: str) -> str | None:
+        if not assignee_id:
+            return None
+        for member in self.members:
+            if member["id"] == assignee_id:
+                return member["name"]
+        return None  # id no longer matches any current member
 
     # -- description text convention (for the stock to-do item dialog) -----
 
@@ -117,10 +122,9 @@ class HouseholdTasksStore:
     def build_description(self, assignee: str, recurring: dict[str, Any] | None) -> str:
         """Build the human-readable description shown in the stock to-do card."""
         lines: list[str] = []
-        if assignee != ASSIGNEE_UNCLAIMED:
-            label = self.assignee_label(assignee)
-            if label:
-                lines.append(f"Assigned: {label}")
+        label = self.assignee_label(assignee)
+        if label:
+            lines.append(f"Assigned: {label}")
         if recurring:
             lines.append(f"Recurring: {recurring['interval']} {recurring['unit']}")
         return "\n".join(lines)
@@ -140,13 +144,24 @@ class HouseholdTasksStore:
         return matches[0] if matches else None
 
     def counts(self) -> dict[str, int]:
+        """Open-task counts keyed by 'unclaimed', 'recurring', and each
+        current member's id. A task whose stored assignee id doesn't match
+        any current member (e.g. that member was since removed) counts as
+        unclaimed rather than disappearing silently."""
         open_tasks = [t for t in self.tasks if t["status"] == "needs_action"]
-        return {
-            "unclaimed": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_UNCLAIMED),
-            "member1": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_MEMBER1),
-            "member2": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_MEMBER2),
-            "recurring": sum(1 for t in open_tasks if t.get("recurring")),
-        }
+        member_ids = {m["id"] for m in self.members}
+        result: dict[str, int] = {"unclaimed": 0, "recurring": 0}
+        for member in self.members:
+            result[member["id"]] = 0
+        for task in open_tasks:
+            if task.get("recurring"):
+                result["recurring"] += 1
+            assignee = task["assignee"]
+            if assignee and assignee in member_ids:
+                result[assignee] += 1
+            else:
+                result["unclaimed"] += 1
+        return result
 
     async def async_add_task(
         self,

@@ -2,17 +2,13 @@
 
 DOMAIN = "household_tasks"
 
-# Stable internal identifiers — never real names. The actual names are
-# entered by the user during setup and stored only in their own HA
-# config entry (never in this repo).
-ASSIGNEE_UNCLAIMED = "unclaimed"
-ASSIGNEE_MEMBER1 = "member1"
-ASSIGNEE_MEMBER2 = "member2"
+# Empty string = unclaimed. Any other assignee value is a member's
+# stable id (see store.py) — never a name directly, and never hardcoded
+# here; members are entered ad hoc through the config/options flow and
+# stored only in the local config entry.
+ASSIGNEE_UNCLAIMED = ""
 
-CONF_MEMBER1_NAME = "member1_name"
-CONF_MEMBER2_NAME = "member2_name"
-DEFAULT_MEMBER1_NAME = "Person 1"
-DEFAULT_MEMBER2_NAME = "Person 2"
+CONF_MEMBERS = "members"  # list[{"id": str, "name": str}] in entry.options
 
 RECURRING_UNITS = ["days", "weeks", "months"]
 

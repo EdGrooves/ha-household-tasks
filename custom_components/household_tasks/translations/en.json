@@ -3,10 +3,9 @@
     "step": {
       "user": {
         "title": "Household Tasks",
-        "description": "Enter the two household members who'll be assigning tasks to themselves. These names are stored only in your Home Assistant configuration, never shared anywhere else.",
+        "description": "Enter the household members who'll be assigning tasks to themselves, separated by commas (e.g. \"Alex, Sam\"). You can leave this blank and add people later. These names are stored only in your Home Assistant configuration, never shared anywhere else.",
         "data": {
-          "member1_name": "First person's name",
-          "member2_name": "Second person's name"
+          "members": "Household members"
         }
       }
     },
@@ -18,10 +17,9 @@
     "step": {
       "init": {
         "title": "Household Tasks",
-        "description": "Rename the two household members.",
+        "description": "Add, rename, or remove household members, separated by commas. Renaming someone here keeps their existing tasks and sensor — removing someone doesn't delete their past tasks, but new counts will show them as unclaimed.",
         "data": {
-          "member1_name": "First person's name",
-          "member2_name": "Second person's name"
+          "members": "Household members"
         }
       }
     }

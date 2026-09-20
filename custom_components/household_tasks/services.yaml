@@ -11,8 +11,8 @@ add_task:
     assignee:
       name: Assignee
       description: >-
-        Who to assign the task to, by name (must match one of the two names
-        entered when setting up this integration). Leave blank to leave it
+        Who to assign the task to, by name (must match one of the household
+        members configured for this integration). Leave blank to leave it
         unclaimed.
       required: false
       selector:
@@ -59,8 +59,8 @@ claim_task:
     assignee:
       name: Assignee
       description: >-
-        Who is claiming it, by name (must match one of the two names entered
-        when setting up this integration).
+        Who is claiming it, by name (must match one of the household members
+        configured for this integration).
       required: true
       selector:
         text:

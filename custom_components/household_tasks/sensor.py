@@ -1,10 +1,12 @@
 """Sensor platform for the Household Tasks integration.
 
-Exposes 4 live open-task-count sensors (unclaimed / per-person /
-recurring). The two person sensors' display names come from whatever
-names were entered in the config flow (never hardcoded here) — if that
-options is later changed, the integration reloads and these are
-recreated with the new label automatically.
+Exposes one live open-task-count sensor per current household member,
+plus "unclaimed" and "recurring" — the number of member sensors is
+whatever's currently configured (zero, two, five, however many), not a
+fixed count. Adding/renaming/removing a member reloads the config entry
+(see __init__.py's update listener), which tears down and recreates
+these sensors to match, so this file never hardcodes who's in the
+household.
 """
 from __future__ import annotations
 
@@ -23,19 +25,26 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Household Tasks count sensors."""
     store: HouseholdTasksStore = hass.data[DOMAIN][entry.entry_id]
-    specs = [
-        ("unclaimed", "Household Tasks Unclaimed", "mdi:help-circle-outline"),
-        ("member1", f"Household Tasks {store.member_names['member1']}", "mdi:account"),
-        ("member2", f"Household Tasks {store.member_names['member2']}", "mdi:account"),
-        ("recurring", "Household Tasks Recurring", "mdi:repeat"),
+
+    entities = [
+        HouseholdTasksCountSensor(
+            store, entry, "unclaimed", "Household Tasks Unclaimed", "mdi:help-circle-outline"
+        ),
+        HouseholdTasksCountSensor(
+            store, entry, "recurring", "Household Tasks Recurring", "mdi:repeat"
+        ),
     ]
-    async_add_entities(
-        HouseholdTasksCountSensor(store, entry, key, name, icon) for key, name, icon in specs
-    )
+    for member in store.members:
+        entities.append(
+            HouseholdTasksCountSensor(
+                store, entry, member["id"], f"Household Tasks {member['name']}", "mdi:account"
+            )
+        )
+    async_add_entities(entities)
 
 
 class HouseholdTasksCountSensor(SensorEntity):
-    """A live count of open tasks matching one bucket (assignee/recurring)."""
+    """A live count of open tasks matching one bucket (member/unclaimed/recurring)."""
 
     _attr_native_unit_of_measurement = "tasks"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -47,6 +56,9 @@ class HouseholdTasksCountSensor(SensorEntity):
         self._key = key
         self._attr_name = name
         self._attr_icon = icon
+        # Keyed by member id (stable across renames), or the literal
+        # "unclaimed"/"recurring" — never a name, so entity_id doesn't
+        # change if someone's renamed later.
         self._attr_unique_id = f"{entry.entry_id}_count_{key}"
 
     async def async_added_to_hass(self) -> None:
@@ -62,4 +74,4 @@ class HouseholdTasksCountSensor(SensorEntity):
         self.async_write_ha_state()
 
     def _refresh(self) -> None:
-        self._attr_native_value = self._store.counts()[self._key]
+        self._attr_native_value = self._store.counts().get(self._key, 0)

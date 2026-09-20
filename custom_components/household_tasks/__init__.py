@@ -8,10 +8,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
-    CONF_MEMBER1_NAME,
-    CONF_MEMBER2_NAME,
-    DEFAULT_MEMBER1_NAME,
-    DEFAULT_MEMBER2_NAME,
+    CONF_MEMBERS,
     DOMAIN,
     RECURRING_UNITS,
     SERVICE_ADD_TASK,
@@ -41,19 +38,16 @@ CLAIM_TASK_SCHEMA = vol.Schema(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Household Tasks from a config entry."""
-    member_names = {
-        "member1": entry.options.get(CONF_MEMBER1_NAME) or DEFAULT_MEMBER1_NAME,
-        "member2": entry.options.get(CONF_MEMBER2_NAME) or DEFAULT_MEMBER2_NAME,
-    }
-    store = HouseholdTasksStore(hass, entry.entry_id, member_names)
+    members = entry.options.get(CONF_MEMBERS, [])
+    store = HouseholdTasksStore(hass, entry.entry_id, members)
     await store.async_load()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = store
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Renaming the two members (via the options flow) reloads the entry,
-    # which re-reads entry.options and rebuilds the sensors/store with the
-    # new names — no restart needed for a rename.
+    # Adding/renaming/removing members (via the options flow) reloads the
+    # entry, which re-reads entry.options and rebuilds the sensors/store
+    # to match — no restart needed to change the member list.
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     async def _handle_add_task(call: ServiceCall) -> None:
