@@ -15,7 +15,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, SIGNAL_UPDATE
-from .store import HouseholdTasksStore, build_description
+from .store import HouseholdTasksStore
 
 
 async def async_setup_entry(
@@ -34,7 +34,7 @@ class HouseholdTasksTodoListEntity(TodoListEntity):
     working without any changes. The description shown in the stock
     to-do item dialog is synthesized from the structured assignee/
     recurring fields on read, and re-parsed from the same convention on
-    write, so tapping an item and typing "Assigned: Eduard" keeps
+    write, so tapping an item and typing "Assigned: <name>" keeps
     working exactly like before.
     """
 
@@ -78,7 +78,9 @@ class HouseholdTasksTodoListEntity(TodoListEntity):
                         else TodoItemStatus.NEEDS_ACTION
                     ),
                     due=due,
-                    description=build_description(task["assignee"], task.get("recurring")),
+                    description=self._store.build_description(
+                        task["assignee"], task.get("recurring")
+                    ),
                 )
             )
         self._attr_todo_items = items

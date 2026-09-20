@@ -2,15 +2,17 @@
 
 DOMAIN = "household_tasks"
 
+# Stable internal identifiers — never real names. The actual names are
+# entered by the user during setup and stored only in their own HA
+# config entry (never in this repo).
 ASSIGNEE_UNCLAIMED = "unclaimed"
-ASSIGNEE_CHRISTINE = "christine"
-ASSIGNEE_EDUARD = "eduard"
-ASSIGNEES = [ASSIGNEE_UNCLAIMED, ASSIGNEE_CHRISTINE, ASSIGNEE_EDUARD]
+ASSIGNEE_MEMBER1 = "member1"
+ASSIGNEE_MEMBER2 = "member2"
 
-ASSIGNEE_DESCRIPTION_LABELS = {
-    ASSIGNEE_CHRISTINE: "Christine",
-    ASSIGNEE_EDUARD: "Eduard",
-}
+CONF_MEMBER1_NAME = "member1_name"
+CONF_MEMBER2_NAME = "member2_name"
+DEFAULT_MEMBER1_NAME = "Person 1"
+DEFAULT_MEMBER2_NAME = "Person 2"
 
 RECURRING_UNITS = ["days", "weeks", "months"]
 

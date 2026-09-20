@@ -10,15 +10,13 @@ add_task:
         text:
     assignee:
       name: Assignee
-      description: Who to assign the task to (leave as unclaimed for either person to grab).
+      description: >-
+        Who to assign the task to, by name (must match one of the two names
+        entered when setting up this integration). Leave blank to leave it
+        unclaimed.
       required: false
-      default: unclaimed
       selector:
-        select:
-          options:
-            - unclaimed
-            - christine
-            - eduard
+        text:
     recurring:
       name: Recurring
       description: Whether this task repeats after being completed.
@@ -60,11 +58,9 @@ claim_task:
         text:
     assignee:
       name: Assignee
-      description: Who is claiming it.
+      description: >-
+        Who is claiming it, by name (must match one of the two names entered
+        when setting up this integration).
       required: true
       selector:
-        select:
-          options:
-            - unclaimed
-            - christine
-            - eduard
+        text:

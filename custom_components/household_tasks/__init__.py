@@ -8,8 +8,10 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 
 from .const import (
-    ASSIGNEE_UNCLAIMED,
-    ASSIGNEES,
+    CONF_MEMBER1_NAME,
+    CONF_MEMBER2_NAME,
+    DEFAULT_MEMBER1_NAME,
+    DEFAULT_MEMBER2_NAME,
     DOMAIN,
     RECURRING_UNITS,
     SERVICE_ADD_TASK,
@@ -22,7 +24,7 @@ PLATFORMS = ["todo", "sensor"]
 ADD_TASK_SCHEMA = vol.Schema(
     {
         vol.Required("name"): cv.string,
-        vol.Optional("assignee", default=ASSIGNEE_UNCLAIMED): vol.In(ASSIGNEES),
+        vol.Optional("assignee", default=""): cv.string,
         vol.Optional("recurring", default=False): cv.boolean,
         vol.Optional("interval", default=1): vol.Coerce(int),
         vol.Optional("unit", default="days"): vol.In(RECURRING_UNITS),
@@ -32,18 +34,27 @@ ADD_TASK_SCHEMA = vol.Schema(
 CLAIM_TASK_SCHEMA = vol.Schema(
     {
         vol.Required("name"): cv.string,
-        vol.Required("assignee"): vol.In(ASSIGNEES),
+        vol.Required("assignee"): cv.string,
     }
 )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Household Tasks from a config entry."""
-    store = HouseholdTasksStore(hass, entry.entry_id)
+    member_names = {
+        "member1": entry.options.get(CONF_MEMBER1_NAME) or DEFAULT_MEMBER1_NAME,
+        "member2": entry.options.get(CONF_MEMBER2_NAME) or DEFAULT_MEMBER2_NAME,
+    }
+    store = HouseholdTasksStore(hass, entry.entry_id, member_names)
     await store.async_load()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = store
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Renaming the two members (via the options flow) reloads the entry,
+    # which re-reads entry.options and rebuilds the sensors/store with the
+    # new names — no restart needed for a rename.
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     async def _handle_add_task(call: ServiceCall) -> None:
         recurring = None
@@ -51,7 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             recurring = {"interval": call.data["interval"], "unit": call.data["unit"]}
         await store.async_add_task(
             summary=call.data["name"],
-            assignee=call.data["assignee"],
+            assignee=store.resolve_assignee(call.data["assignee"]),
             recurring=recurring,
         )
 
@@ -59,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         task = store.find_open_by_summary(call.data["name"])
         if task is None:
             return
-        await store.async_claim_task(task["uid"], call.data["assignee"])
+        await store.async_claim_task(task["uid"], store.resolve_assignee(call.data["assignee"]))
 
     hass.services.async_register(
         DOMAIN, SERVICE_ADD_TASK, _handle_add_task, schema=ADD_TASK_SCHEMA
@@ -69,6 +80,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

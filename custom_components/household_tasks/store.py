@@ -2,9 +2,10 @@
 
 Tasks are kept as plain dicts backed by Home Assistant's Store helper
 (the same JSON-persistence mechanism most core integrations use for
-local state). This module is the single place that knows the task
-schema and the recurring-renewal logic; the todo and sensor platforms
-just read from it and react to its update signal.
+local state). Assignee is stored as a stable key (member1/member2/
+unclaimed) rather than a name directly, so renaming a person later
+(via the options flow) doesn't require touching any stored task —
+only the display label changes.
 """
 from __future__ import annotations
 
@@ -18,56 +19,14 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.storage import Store
 
 from .const import (
-    ASSIGNEE_CHRISTINE,
-    ASSIGNEE_DESCRIPTION_LABELS,
-    ASSIGNEE_EDUARD,
+    ASSIGNEE_MEMBER1,
+    ASSIGNEE_MEMBER2,
     ASSIGNEE_UNCLAIMED,
     SIGNAL_UPDATE,
     STORAGE_VERSION,
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def parse_description(description: str | None) -> tuple[str, dict[str, Any] | None]:
-    """Parse 'Assigned:'/'Recurring:' lines out of a free-text description.
-
-    Kept for compatibility with tasks created or edited through the stock
-    to-do item dialog (same convention the previous helper-based setup
-    used), so existing muscle memory keeps working. Returns
-    (assignee, recurring) where recurring is None or
-    {"interval": int, "unit": str}.
-    """
-    assignee = ASSIGNEE_UNCLAIMED
-    recurring: dict[str, Any] | None = None
-    if not description:
-        return assignee, recurring
-    for raw_line in description.splitlines():
-        line = raw_line.strip()
-        lowered = line.lower()
-        if lowered.startswith("assigned:"):
-            value = line.split(":", 1)[1].strip().lower()
-            if value == "christine":
-                assignee = ASSIGNEE_CHRISTINE
-            elif value == "eduard":
-                assignee = ASSIGNEE_EDUARD
-        elif lowered.startswith("recurring:"):
-            value = line.split(":", 1)[1].strip()
-            parts = value.split()
-            if len(parts) >= 2 and parts[0].isdigit():
-                recurring = {"interval": int(parts[0]), "unit": parts[1].lower()}
-    return assignee, recurring
-
-
-def build_description(assignee: str, recurring: dict[str, Any] | None) -> str:
-    """Build the human-readable description shown in the stock to-do card."""
-    lines: list[str] = []
-    label = ASSIGNEE_DESCRIPTION_LABELS.get(assignee)
-    if label:
-        lines.append(f"Assigned: {label}")
-    if recurring:
-        lines.append(f"Recurring: {recurring['interval']} {recurring['unit']}")
-    return "\n".join(lines)
 
 
 def _interval_days(recurring: dict[str, Any]) -> int:
@@ -102,10 +61,12 @@ def _new_task(
 class HouseholdTasksStore:
     """In-memory task list backed by HA's Store helper."""
 
-    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+    def __init__(self, hass: HomeAssistant, entry_id: str, member_names: dict[str, str]) -> None:
         self.hass = hass
         self._store: Store = Store(hass, STORAGE_VERSION, f"household_tasks_{entry_id}")
         self.tasks: list[dict[str, Any]] = []
+        # {"member1": "<name entered at setup>", "member2": "<...>"}
+        self.member_names = member_names
 
     async def async_load(self) -> None:
         data = await self._store.async_load()
@@ -114,6 +75,57 @@ class HouseholdTasksStore:
     async def _async_save(self) -> None:
         await self._store.async_save({"tasks": self.tasks})
         async_dispatcher_send(self.hass, SIGNAL_UPDATE)
+
+    # -- name <-> stable key resolution ------------------------------------
+
+    def resolve_assignee(self, text: str) -> str:
+        """Match free text (a configured name, or anything else) to a key."""
+        value = (text or "").strip().lower()
+        for key, name in self.member_names.items():
+            if name and value == name.strip().lower():
+                return key
+        return ASSIGNEE_UNCLAIMED
+
+    def assignee_label(self, key: str) -> str | None:
+        return self.member_names.get(key)
+
+    # -- description text convention (for the stock to-do item dialog) -----
+
+    def parse_description(self, description: str | None) -> tuple[str, dict[str, Any] | None]:
+        """Parse 'Assigned:'/'Recurring:' lines out of a free-text description.
+
+        Kept for compatibility with tasks created or edited through the
+        stock to-do item dialog, so typing "Assigned: <name>" there keeps
+        working exactly like the previous helper-based setup.
+        """
+        assignee = ASSIGNEE_UNCLAIMED
+        recurring: dict[str, Any] | None = None
+        if not description:
+            return assignee, recurring
+        for raw_line in description.splitlines():
+            line = raw_line.strip()
+            lowered = line.lower()
+            if lowered.startswith("assigned:"):
+                assignee = self.resolve_assignee(line.split(":", 1)[1])
+            elif lowered.startswith("recurring:"):
+                value = line.split(":", 1)[1].strip()
+                parts = value.split()
+                if len(parts) >= 2 and parts[0].isdigit():
+                    recurring = {"interval": int(parts[0]), "unit": parts[1].lower()}
+        return assignee, recurring
+
+    def build_description(self, assignee: str, recurring: dict[str, Any] | None) -> str:
+        """Build the human-readable description shown in the stock to-do card."""
+        lines: list[str] = []
+        if assignee != ASSIGNEE_UNCLAIMED:
+            label = self.assignee_label(assignee)
+            if label:
+                lines.append(f"Assigned: {label}")
+        if recurring:
+            lines.append(f"Recurring: {recurring['interval']} {recurring['unit']}")
+        return "\n".join(lines)
+
+    # -- task CRUD -----------------------------------------------------------
 
     def get_task(self, uid: str) -> dict[str, Any] | None:
         return next((t for t in self.tasks if t["uid"] == uid), None)
@@ -131,8 +143,8 @@ class HouseholdTasksStore:
         open_tasks = [t for t in self.tasks if t["status"] == "needs_action"]
         return {
             "unclaimed": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_UNCLAIMED),
-            "christine": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_CHRISTINE),
-            "eduard": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_EDUARD),
+            "member1": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_MEMBER1),
+            "member2": sum(1 for t in open_tasks if t["assignee"] == ASSIGNEE_MEMBER2),
             "recurring": sum(1 for t in open_tasks if t.get("recurring")),
         }
 
@@ -152,7 +164,7 @@ class HouseholdTasksStore:
         self, summary: str, description: str | None, due: str | None
     ) -> dict[str, Any]:
         """Add a task created via the stock to-do item dialog."""
-        assignee, recurring = parse_description(description)
+        assignee, recurring = self.parse_description(description)
         task = _new_task(summary, assignee, recurring, due)
         self.tasks.append(task)
         await self._async_save()
@@ -177,7 +189,7 @@ class HouseholdTasksStore:
         if due is not None:
             task["due"] = due
         if description_given:
-            assignee, recurring = parse_description(description)
+            assignee, recurring = self.parse_description(description)
             task["assignee"] = assignee
             task["recurring"] = recurring
 
